@@ -42,6 +42,7 @@ __FBSDID("$FreeBSD: releng/10.3/sys/ufs/ufs/ufs_vnops.c 292540 2015-12-21 11:44:
 #include "opt_ufs.h"
 #include "opt_ffs.h"
 
+#include <sys/syslog.h>
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/malloc.h>
@@ -569,6 +570,11 @@ ufs_setattr(ap)
 			    (SF_NOUNLINK | SF_IMMUTABLE | SF_APPEND) ||
 			    ((vap->va_flags ^ ip->i_flags) & SF_SETTABLE))
 				return (EPERM);
+		}
+		/*MOROZ*/
+		if (vap->va_flags & IMMUTABLE){
+			printf("Permission denied\n");
+			return (EPERM);
 		}
 		ip->i_flags = vap->va_flags;
 		DIP_SET(ip, i_flags, vap->va_flags);

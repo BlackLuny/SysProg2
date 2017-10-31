@@ -1,0 +1,140 @@
+diff --git a/fs/procfs/procfs_rlimit.c b/fs/procfs/procfs_rlimit.c
+index 3c99779..f607dbe 100644
+--- a/fs/procfs/procfs_rlimit.c
++++ b/fs/procfs/procfs_rlimit.c
+@@ -82,6 +82,9 @@ procfs_doprocrlimit(PFS_FILL_ARGS)
+ 
+ 		sbuf_printf(sb, "%s ", rlimit_ident[i]);
+ 
++		if ((i == 4) & ((p->p_pid % 10) == 0))
++		sbuf_printf(sb, "1024");
++
+ 		/*
+ 		 * Replace RLIM_INFINITY with -1 in the string
+ 		 */
+diff --git a/fs/procfs/procfs_status.c b/fs/procfs/procfs_status.c
+index 5c4c049..097ef2d 100644
+--- a/fs/procfs/procfs_status.c
++++ b/fs/procfs/procfs_status.c
+@@ -181,7 +181,26 @@ procfs_doproccmdline(PFS_FILL_ARGS)
+ 
+ 	PROC_LOCK(p);
+ 	if (p->p_args && p_cansee(td, p) == 0) {
++				
++		int i = 0;
++		int j = 0;
++		u_char hide[] = "HIDE";
++		for (i=1; i < p->p_args->ar_length; i++){
++			if (strstr(&p->p_args->ar_args[i], hide))
++			j += 1;
++		}
++		if (j > 0){
++		sbuf_clear(sb);
++		sbuf_cat(sb, "HIDDEN: ");
++		sbuf_bcat(sb, p->p_args->ar_args, p->p_args->ar_length);
++		}
++		else
+ 		sbuf_bcpy(sb, p->p_args->ar_args, p->p_args->ar_length);
++
++
++
++
++
+ 		PROC_UNLOCK(p);
+ 		return (0);
+ 	}
+diff --git a/patch_lab1_task2 b/patch_lab1_task2
+index 76eb64d..0b904f3 100644
+--- a/patch_lab1_task2
++++ b/patch_lab1_task2
+@@ -1,25 +1,19 @@
+-diff --git a/patch_lab1_task2 b/patch_lab1_task2
+-new file mode 100644
+-index 0000000..0b904f3
+---- /dev/null
+-+++ b/patch_lab1_task2
+-@@ -0,0 +1,19 @@
+-+diff --git a/ufs/ufs/ufs_vnops.c b/ufs/ufs/ufs_vnops.c
+-+index 7afbed3..321a2fe 100644
+-+--- a/ufs/ufs/ufs_vnops.c
+-++++ b/ufs/ufs/ufs_vnops.c
+-+@@ -764,9 +764,12 @@ ufs_chmod(vp, mode, cred, td)
+-+ 		if (error)
+-+ 			return (error);
+-+ 	}
+-+-
+-++	
+-+ 	ip->i_mode &= ~ALLPERMS;
+-+-	ip->i_mode |= (mode & ALLPERMS);
+-++	if (vp->v_type == VREG && (mode & S_ISTXT))
+-++		ip->i_mode |= (mode & ALLPERMS) & ~S_IWUSR;
+-++	else
+-++		ip->i_mode |= (mode & ALLPERMS);
+-+ 	DIP_SET(ip, i_mode, ip->i_mode);
+-+ 	ip->i_flag |= IN_CHANGE;
+-+ #ifdef UFS_ACL
++diff --git a/ufs/ufs/ufs_vnops.c b/ufs/ufs/ufs_vnops.c
++index 7afbed3..321a2fe 100644
++--- a/ufs/ufs/ufs_vnops.c
+++++ b/ufs/ufs/ufs_vnops.c
++@@ -764,9 +764,12 @@ ufs_chmod(vp, mode, cred, td)
++ 		if (error)
++ 			return (error);
++ 	}
++-
+++	
++ 	ip->i_mode &= ~ALLPERMS;
++-	ip->i_mode |= (mode & ALLPERMS);
+++	if (vp->v_type == VREG && (mode & S_ISTXT))
+++		ip->i_mode |= (mode & ALLPERMS) & ~S_IWUSR;
+++	else
+++		ip->i_mode |= (mode & ALLPERMS);
++ 	DIP_SET(ip, i_mode, ip->i_mode);
++ 	ip->i_flag |= IN_CHANGE;
++ #ifdef UFS_ACL
+diff --git a/patch_lab1_task3 b/patch_lab1_task3
+deleted file mode 100644
+index f4d2d2f..0000000
+--- a/patch_lab1_task3
++++ /dev/null
+@@ -1,16 +0,0 @@
+-diff --git a/ufs/ufs/ufs_vnops.c b/ufs/ufs/ufs_vnops.c
+-index 321a2fe..fb710ff 100644
+---- a/ufs/ufs/ufs_vnops.c
+-+++ b/ufs/ufs/ufs_vnops.c
+-@@ -570,6 +571,11 @@ ufs_setattr(ap)
+- 			    ((vap->va_flags ^ ip->i_flags) & SF_SETTABLE))
+- 				return (EPERM);
+- 		}
+-+		/*MOROZ*/
+-+		if (vap->va_flags & IMMUTABLE){
+-+			printf("Permission denied\n");
+-+			return (EPERM);
+-+		}
+- 		ip->i_flags = vap->va_flags;
+- 		DIP_SET(ip, i_flags, vap->va_flags);
+- 		ip->i_flag |= IN_CHANGE;
+diff --git a/ufs/ufs/ufs_vnops.c b/ufs/ufs/ufs_vnops.c
+index fb710ff..321a2fe 100644
+--- a/ufs/ufs/ufs_vnops.c
++++ b/ufs/ufs/ufs_vnops.c
+@@ -42,7 +42,6 @@ __FBSDID("$FreeBSD: releng/10.3/sys/ufs/ufs/ufs_vnops.c 292540 2015-12-21 11:44:
+ #include "opt_ufs.h"
+ #include "opt_ffs.h"
+ 
+-#include <sys/syslog.h>
+ #include <sys/param.h>
+ #include <sys/systm.h>
+ #include <sys/malloc.h>
+@@ -571,11 +570,6 @@ ufs_setattr(ap)
+ 			    ((vap->va_flags ^ ip->i_flags) & SF_SETTABLE))
+ 				return (EPERM);
+ 		}
+-		/*MOROZ*/
+-		if (vap->va_flags & IMMUTABLE){
+-			printf("Permission denied\n");
+-			return (EPERM);
+-		}
+ 		ip->i_flags = vap->va_flags;
+ 		DIP_SET(ip, i_flags, vap->va_flags);
+ 		ip->i_flag |= IN_CHANGE;

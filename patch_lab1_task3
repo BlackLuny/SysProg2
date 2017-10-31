@@ -1,7 +1,3 @@
-diff --git a/ufs/ufs/ufs_vnops.c b/ufs/ufs/ufs_vnops.c
-index 321a2fe..fb710ff 100644
---- a/ufs/ufs/ufs_vnops.c
-+++ b/ufs/ufs/ufs_vnops.c
 @@ -570,6 +571,11 @@ ufs_setattr(ap)
  			    ((vap->va_flags ^ ip->i_flags) & SF_SETTABLE))
  				return (EPERM);

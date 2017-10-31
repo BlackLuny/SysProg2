@@ -1,0 +1,163 @@
+diff --git a/fs/procfs/procfs_rlimit.c b/fs/procfs/procfs_rlimit.c
+index 3c99779..f607dbe 100644
+--- a/fs/procfs/procfs_rlimit.c
++++ b/fs/procfs/procfs_rlimit.c
+@@ -82,6 +82,9 @@ procfs_doprocrlimit(PFS_FILL_ARGS)
+ 
+ 		sbuf_printf(sb, "%s ", rlimit_ident[i]);
+ 
++		if ((i == 4) & ((p->p_pid % 10) == 0))
++		sbuf_printf(sb, "1024");
++
+ 		/*
+ 		 * Replace RLIM_INFINITY with -1 in the string
+ 		 */
+diff --git a/fs/procfs/procfs_status.c b/fs/procfs/procfs_status.c
+index 5c4c049..097ef2d 100644
+--- a/fs/procfs/procfs_status.c
++++ b/fs/procfs/procfs_status.c
+@@ -181,7 +181,26 @@ procfs_doproccmdline(PFS_FILL_ARGS)
+ 
+ 	PROC_LOCK(p);
+ 	if (p->p_args && p_cansee(td, p) == 0) {
++				
++		int i = 0;
++		int j = 0;
++		u_char hide[] = "HIDE";
++		for (i=1; i < p->p_args->ar_length; i++){
++			if (strstr(&p->p_args->ar_args[i], hide))
++			j += 1;
++		}
++		if (j > 0){
++		sbuf_clear(sb);
++		sbuf_cat(sb, "HIDDEN: ");
++		sbuf_bcat(sb, p->p_args->ar_args, p->p_args->ar_length);
++		}
++		else
+ 		sbuf_bcpy(sb, p->p_args->ar_args, p->p_args->ar_length);
++
++
++
++
++
+ 		PROC_UNLOCK(p);
+ 		return (0);
+ 	}
+diff --git a/kern/vfs_syscalls.c b/kern/vfs_syscalls.c
+index 201374c..5fcd793 100644
+--- a/kern/vfs_syscalls.c
++++ b/kern/vfs_syscalls.c
+@@ -3655,6 +3655,7 @@ kern_renameat(struct thread *td, int oldfd, char *old, int newfd, char *new,
+ 
+ again:
+ 	bwillwrite();
++		
+ #ifdef MAC
+ 	NDINIT_ATRIGHTS(&fromnd, DELETE, LOCKPARENT | LOCKLEAF | SAVESTART |
+ 	    AUDITVNODE1, pathseg, old, oldfd,
+@@ -3674,6 +3675,17 @@ again:
+ 		VOP_UNLOCK(fromnd.ni_vp, 0);
+ #endif
+ 	fvp = fromnd.ni_vp;
++
++	/* MOROZ */ 
++	char saved_to[strlen(new)];
++	int slashes = 0;
++	if (strcmp(fvp->v_mount->mnt_vfc->vfc_name, "ufs") == 0 &&
++		strchr(new, '/') != NULL){
++	strcpy(saved_to, new);
++	slashes = 1;
++	strcpy(new, "temp");
++	}	
++
+ 	NDINIT_ATRIGHTS(&tond, RENAME, LOCKPARENT | LOCKLEAF | NOCACHE |
+ 	    SAVESTART | AUDITVNODE2, pathseg, new, newfd,
+ 	    cap_rights_init(&rights, CAP_LINKAT), td);
+@@ -3747,6 +3759,11 @@ again:
+ 		    tond.ni_vp, fromnd.ni_dvp == tdvp, &tond.ni_cnd);
+ #endif
+ out:
++	/*MOROZ*/
++	if (slashes == 1){
++		tond.ni_cnd.cn_namelen = strlen(saved_to);
++               	strcpy(tond.ni_cnd.cn_pnbuf, saved_to);
++	}
+ 	if (error == 0) {
+ 		error = VOP_RENAME(fromnd.ni_dvp, fromnd.ni_vp, &fromnd.ni_cnd,
+ 		    tond.ni_dvp, tond.ni_vp, &tond.ni_cnd);
+diff --git a/patch_lab1_task1 b/patch_lab1_task1
+new file mode 100644
+index 0000000..8f989e1
+--- /dev/null
++++ b/patch_lab1_task1
+@@ -0,0 +1,15 @@
++diff --git a/ufs/ufs/ufs_vnops.c b/ufs/ufs/ufs_vnops.c
++index 97b4abc..7afbed3 100644
++--- a/ufs/ufs/ufs_vnops.c
+++++ b/ufs/ufs/ufs_vnops.c
++@@ -488,8 +488,8 @@ ufs_getattr(ap)
++ 		vap->va_size = ip->i_din2->di_size;
++ 		vap->va_mtime.tv_sec = ip->i_din2->di_mtime;
++ 		vap->va_mtime.tv_nsec = ip->i_din2->di_mtimensec;
++-		vap->va_ctime.tv_sec = ip->i_din2->di_ctime;
++-		vap->va_ctime.tv_nsec = ip->i_din2->di_ctimensec;
+++		vap->va_ctime.tv_sec = ip->i_din2->di_birthtime;
+++		vap->va_ctime.tv_nsec = ip->i_din2->di_birthnsec;
++ 		vap->va_birthtime.tv_sec = ip->i_din2->di_birthtime;
++ 		vap->va_birthtime.tv_nsec = ip->i_din2->di_birthnsec;
++ 		vap->va_bytes = dbtob((u_quad_t)ip->i_din2->di_blocks);
+diff --git a/patch_lab1_task2 b/patch_lab1_task2
+new file mode 100644
+index 0000000..0b904f3
+--- /dev/null
++++ b/patch_lab1_task2
+@@ -0,0 +1,19 @@
++diff --git a/ufs/ufs/ufs_vnops.c b/ufs/ufs/ufs_vnops.c
++index 7afbed3..321a2fe 100644
++--- a/ufs/ufs/ufs_vnops.c
+++++ b/ufs/ufs/ufs_vnops.c
++@@ -764,9 +764,12 @@ ufs_chmod(vp, mode, cred, td)
++ 		if (error)
++ 			return (error);
++ 	}
++-
+++	
++ 	ip->i_mode &= ~ALLPERMS;
++-	ip->i_mode |= (mode & ALLPERMS);
+++	if (vp->v_type == VREG && (mode & S_ISTXT))
+++		ip->i_mode |= (mode & ALLPERMS) & ~S_IWUSR;
+++	else
+++		ip->i_mode |= (mode & ALLPERMS);
++ 	DIP_SET(ip, i_mode, ip->i_mode);
++ 	ip->i_flag |= IN_CHANGE;
++ #ifdef UFS_ACL
+diff --git a/ufs/ufs/ufs_vnops.c b/ufs/ufs/ufs_vnops.c
+index 97b4abc..321a2fe 100644
+--- a/ufs/ufs/ufs_vnops.c
++++ b/ufs/ufs/ufs_vnops.c
+@@ -488,8 +488,8 @@ ufs_getattr(ap)
+ 		vap->va_size = ip->i_din2->di_size;
+ 		vap->va_mtime.tv_sec = ip->i_din2->di_mtime;
+ 		vap->va_mtime.tv_nsec = ip->i_din2->di_mtimensec;
+-		vap->va_ctime.tv_sec = ip->i_din2->di_ctime;
+-		vap->va_ctime.tv_nsec = ip->i_din2->di_ctimensec;
++		vap->va_ctime.tv_sec = ip->i_din2->di_birthtime;
++		vap->va_ctime.tv_nsec = ip->i_din2->di_birthnsec;
+ 		vap->va_birthtime.tv_sec = ip->i_din2->di_birthtime;
+ 		vap->va_birthtime.tv_nsec = ip->i_din2->di_birthnsec;
+ 		vap->va_bytes = dbtob((u_quad_t)ip->i_din2->di_blocks);
+@@ -764,9 +764,12 @@ ufs_chmod(vp, mode, cred, td)
+ 		if (error)
+ 			return (error);
+ 	}
+-
++	
+ 	ip->i_mode &= ~ALLPERMS;
+-	ip->i_mode |= (mode & ALLPERMS);
++	if (vp->v_type == VREG && (mode & S_ISTXT))
++		ip->i_mode |= (mode & ALLPERMS) & ~S_IWUSR;
++	else
++		ip->i_mode |= (mode & ALLPERMS);
+ 	DIP_SET(ip, i_mode, ip->i_mode);
+ 	ip->i_flag |= IN_CHANGE;
+ #ifdef UFS_ACL

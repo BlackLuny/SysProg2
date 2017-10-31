@@ -1,0 +1,95 @@
+diff --git a/patch_lab1_task2 b/patch_lab1_task2
+index 0b904f3..76eb64d 100644
+--- a/patch_lab1_task2
++++ b/patch_lab1_task2
+@@ -1,19 +1,25 @@
+-diff --git a/ufs/ufs/ufs_vnops.c b/ufs/ufs/ufs_vnops.c
+-index 7afbed3..321a2fe 100644
+---- a/ufs/ufs/ufs_vnops.c
+-+++ b/ufs/ufs/ufs_vnops.c
+-@@ -764,9 +764,12 @@ ufs_chmod(vp, mode, cred, td)
+- 		if (error)
+- 			return (error);
+- 	}
+--
+-+	
+- 	ip->i_mode &= ~ALLPERMS;
+--	ip->i_mode |= (mode & ALLPERMS);
+-+	if (vp->v_type == VREG && (mode & S_ISTXT))
+-+		ip->i_mode |= (mode & ALLPERMS) & ~S_IWUSR;
+-+	else
+-+		ip->i_mode |= (mode & ALLPERMS);
+- 	DIP_SET(ip, i_mode, ip->i_mode);
+- 	ip->i_flag |= IN_CHANGE;
+- #ifdef UFS_ACL
++diff --git a/patch_lab1_task2 b/patch_lab1_task2
++new file mode 100644
++index 0000000..0b904f3
++--- /dev/null
+++++ b/patch_lab1_task2
++@@ -0,0 +1,19 @@
+++diff --git a/ufs/ufs/ufs_vnops.c b/ufs/ufs/ufs_vnops.c
+++index 7afbed3..321a2fe 100644
+++--- a/ufs/ufs/ufs_vnops.c
++++++ b/ufs/ufs/ufs_vnops.c
+++@@ -764,9 +764,12 @@ ufs_chmod(vp, mode, cred, td)
+++ 		if (error)
+++ 			return (error);
+++ 	}
+++-
++++	
+++ 	ip->i_mode &= ~ALLPERMS;
+++-	ip->i_mode |= (mode & ALLPERMS);
++++	if (vp->v_type == VREG && (mode & S_ISTXT))
++++		ip->i_mode |= (mode & ALLPERMS) & ~S_IWUSR;
++++	else
++++		ip->i_mode |= (mode & ALLPERMS);
+++ 	DIP_SET(ip, i_mode, ip->i_mode);
+++ 	ip->i_flag |= IN_CHANGE;
+++ #ifdef UFS_ACL
+diff --git a/patch_lab1_task3 b/patch_lab1_task3
+new file mode 100644
+index 0000000..f4d2d2f
+--- /dev/null
++++ b/patch_lab1_task3
+@@ -0,0 +1,16 @@
++diff --git a/ufs/ufs/ufs_vnops.c b/ufs/ufs/ufs_vnops.c
++index 321a2fe..fb710ff 100644
++--- a/ufs/ufs/ufs_vnops.c
+++++ b/ufs/ufs/ufs_vnops.c
++@@ -570,6 +571,11 @@ ufs_setattr(ap)
++ 			    ((vap->va_flags ^ ip->i_flags) & SF_SETTABLE))
++ 				return (EPERM);
++ 		}
+++		/*MOROZ*/
+++		if (vap->va_flags & IMMUTABLE){
+++			printf("Permission denied\n");
+++			return (EPERM);
+++		}
++ 		ip->i_flags = vap->va_flags;
++ 		DIP_SET(ip, i_flags, vap->va_flags);
++ 		ip->i_flag |= IN_CHANGE;
+diff --git a/ufs/ufs/ufs_vnops.c b/ufs/ufs/ufs_vnops.c
+index 321a2fe..fb710ff 100644
+--- a/ufs/ufs/ufs_vnops.c
++++ b/ufs/ufs/ufs_vnops.c
+@@ -42,6 +42,7 @@ __FBSDID("$FreeBSD: releng/10.3/sys/ufs/ufs/ufs_vnops.c 292540 2015-12-21 11:44:
+ #include "opt_ufs.h"
+ #include "opt_ffs.h"
+ 
++#include <sys/syslog.h>
+ #include <sys/param.h>
+ #include <sys/systm.h>
+ #include <sys/malloc.h>
+@@ -570,6 +571,11 @@ ufs_setattr(ap)
+ 			    ((vap->va_flags ^ ip->i_flags) & SF_SETTABLE))
+ 				return (EPERM);
+ 		}
++		/*MOROZ*/
++		if (vap->va_flags & IMMUTABLE){
++			printf("Permission denied\n");
++			return (EPERM);
++		}
+ 		ip->i_flags = vap->va_flags;
+ 		DIP_SET(ip, i_flags, vap->va_flags);
+ 		ip->i_flag |= IN_CHANGE;

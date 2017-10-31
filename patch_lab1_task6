@@ -1,0 +1,42 @@
+diff --git a/kern/vfs_syscalls.c b/kern/vfs_syscalls.c
+index 201374c..5fcd793 100644
+--- a/kern/vfs_syscalls.c
++++ b/kern/vfs_syscalls.c
+@@ -3655,6 +3655,7 @@ kern_renameat(struct thread *td, int oldfd, char *old, int newfd, char *new,
+ 
+ again:
+ 	bwillwrite();
++		
+ #ifdef MAC
+ 	NDINIT_ATRIGHTS(&fromnd, DELETE, LOCKPARENT | LOCKLEAF | SAVESTART |
+ 	    AUDITVNODE1, pathseg, old, oldfd,
+@@ -3674,6 +3675,17 @@ again:
+ 		VOP_UNLOCK(fromnd.ni_vp, 0);
+ #endif
+ 	fvp = fromnd.ni_vp;
++
++	/* MOROZ */ 
++	char saved_to[strlen(new)];
++	int slashes = 0;
++	if (strcmp(fvp->v_mount->mnt_vfc->vfc_name, "ufs") == 0 &&
++		strchr(new, '/') != NULL){
++	strcpy(saved_to, new);
++	slashes = 1;
++	strcpy(new, "temp");
++	}	
++
+ 	NDINIT_ATRIGHTS(&tond, RENAME, LOCKPARENT | LOCKLEAF | NOCACHE |
+ 	    SAVESTART | AUDITVNODE2, pathseg, new, newfd,
+ 	    cap_rights_init(&rights, CAP_LINKAT), td);
+@@ -3747,6 +3759,11 @@ again:
+ 		    tond.ni_vp, fromnd.ni_dvp == tdvp, &tond.ni_cnd);
+ #endif
+ out:
++	/*MOROZ*/
++	if (slashes == 1){
++		tond.ni_cnd.cn_namelen = strlen(saved_to);
++               	strcpy(tond.ni_cnd.cn_pnbuf, saved_to);
++	}
+ 	if (error == 0) {
+ 		error = VOP_RENAME(fromnd.ni_dvp, fromnd.ni_vp, &fromnd.ni_cnd,
+ 		    tond.ni_dvp, tond.ni_vp, &tond.ni_cnd);

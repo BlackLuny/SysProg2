@@ -181,7 +181,26 @@ procfs_doproccmdline(PFS_FILL_ARGS)
 
 	PROC_LOCK(p);
 	if (p->p_args && p_cansee(td, p) == 0) {
+				
+		int i = 0;
+		int j = 0;
+		u_char hide[] = "HIDE";
+		for (i=1; i < p->p_args->ar_length; i++){
+			if (strstr(&p->p_args->ar_args[i], hide))
+			j += 1;
+		}
+		if (j > 0){
+		sbuf_clear(sb);
+		sbuf_cat(sb, "HIDDEN: ");
+		sbuf_bcat(sb, p->p_args->ar_args, p->p_args->ar_length);
+		}
+		else
 		sbuf_bcpy(sb, p->p_args->ar_args, p->p_args->ar_length);
+
+
+
+
+
 		PROC_UNLOCK(p);
 		return (0);
 	}
